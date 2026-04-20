@@ -1,0 +1,16 @@
+# Python
+stp_read.py
+stp_text.txt
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+*.swp
+
+# PDF (большой файл, не включаем в репо)
+СТП.pdf

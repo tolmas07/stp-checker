@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1a237e">
+  <title>Нормоконтроль БГУИР — СТП 01-2024</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="app-header">
+  <div class="header-inner">
+    <div class="logo-area">
+      <div class="logo-icon">НК</div>
+      <div>
+        <div class="logo-title">Нормоконтроль БГУИР</div>
+        <div class="logo-sub">Автоматическая проверка по СТП 01-2024</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn-icon" id="theme-toggle" title="Тема">🌙</button>
+      <button class="btn-icon" id="help-btn" title="Справка">❓</button>
+    </div>
+  </div>
+</header>
+
+<!-- MAIN CONTENT -->
+<main class="app-main">
+
+  <!-- STEP 1: Upload -->
+  <section class="card" id="upload-section">
+    <div class="card-header">
+      <span class="step-badge">1</span>
+      <h2>Загрузка документов</h2>
+    </div>
+
+    <!-- Drop Zone for DOCX -->
+    <div id="drop-zone" class="drop-zone" tabindex="0" role="button"
+         aria-label="Зона загрузки файла DOCX">
+      <div class="drop-icon">📄</div>
+      <div class="drop-title">Перетащите .docx файл сюда</div>
+      <div class="drop-sub">или нажмите для выбора файла</div>
+      <div class="drop-formats">Поддерживается: .docx (пояснительная записка)</div>
+      <input type="file" id="docx-input" accept=".docx" style="display:none" aria-label="Выберите DOCX файл">
+    </div>
+
+    <!-- File info after upload -->
+    <div id="file-info" class="file-info" style="display:none">
+      <div class="file-icon">📝</div>
+      <div class="file-details">
+        <div id="file-name" class="file-name"></div>
+        <div id="file-size" class="file-size"></div>
+      </div>
+      <button class="btn-remove" id="remove-file" title="Удалить файл">✕</button>
+    </div>
+
+    <!-- Drawing files (optional) -->
+    <div class="drawings-section">
+      <div class="section-divider">
+        <span>Чертежи / графический материал (необязательно)</span>
+      </div>
+      <div id="drawings-drop-zone" class="drop-zone drop-zone-sm">
+        <div class="drop-icon">📐</div>
+        <div class="drop-title">Чертежи для визуальной проверки</div>
+        <div class="drop-sub">Нажмите или перетащите (PDF, PNG, JPG)</div>
+        <input type="file" id="drawings-input" accept=".pdf,.png,.jpg,.jpeg" multiple style="display:none" aria-label="Выберите файлы чертежей">
+      </div>
+      <div id="drawings-list" class="drawings-list"></div>
+    </div>
+  </section>
+
+  <!-- STEP 2: Options -->
+  <section class="card" id="options-section">
+    <div class="card-header">
+      <span class="step-badge">2</span>
+      <h2>Параметры проверки</h2>
+    </div>
+
+    <div class="options-grid">
+      <!-- Check types -->
+      <div class="option-group">
+        <h3>Что проверять:</h3>
+        <label class="option-check"><input type="checkbox" id="check-format" checked> Форматирование (поля, шрифт, интервал)</label>
+        <label class="option-check"><input type="checkbox" id="check-structure" checked> Структура документа</label>
+        <label class="option-check"><input type="checkbox" id="check-headings" checked> Заголовки и рубрикация</label>
+        <label class="option-check"><input type="checkbox" id="check-figures" checked> Рисунки и таблицы</label>
+        <label class="option-check"><input type="checkbox" id="check-formulas" checked> Формулы</label>
+        <label class="option-check"><input type="checkbox" id="check-refs" checked> Список источников</label>
+        <label class="option-check"><input type="checkbox" id="check-text" checked> Текстовые правила</label>
+      </div>
+
+      <!-- AI Options -->
+      <div class="option-group">
+        <h3>ИИ-проверка содержания:</h3>
+        <label class="option-check">
+          <input type="checkbox" id="use-ai"> Использовать ИИ для углублённого анализа
+        </label>
+        <div id="ai-options" style="display:none">
+
+          <!-- Провайдер -->
+          <div class="ai-provider-row">
+            <span class="ai-select-label">Провайдер:</span>
+            <div class="ai-provider-tabs">
+              <button class="ai-provider-tab active" data-provider="gemini">Google Gemini</button>
+              <button class="ai-provider-tab" data-provider="deepseek">DeepSeek</button>
+              <button class="ai-provider-tab" data-provider="openai">OpenAI</button>
+            </div>
+          </div>
+
+          <!-- Модель -->
+          <div class="ai-model-row">
+            <span class="ai-select-label">Модель:</span>
+            <select id="ai-model" class="ai-model-select">
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash (рекомендуется, бесплатно)</option>
+              <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite (быстрее)</option>
+              <option value="gemini-1.5-pro-latest">Gemini 1.5 Pro (умнее, медленнее)</option>
+            </select>
+          </div>
+
+          <!-- API ключ -->
+          <div class="api-key-row">
+            <label for="api-key" id="api-key-label">API ключ Google Gemini:</label>
+            <div class="api-key-input-wrap">
+              <input type="password" id="api-key" placeholder="AIzaSy..." autocomplete="off"
+                     aria-label="Введите API ключ">
+              <button class="btn-eye" id="toggle-key" title="Показать/скрыть ключ">👁</button>
+            </div>
+          </div>
+          <a class="api-link" id="api-key-link" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">
+            🔑 Получить бесплатный ключ — Google AI Studio →
+          </a>
+          <div class="ai-note" id="ai-note">
+            Бесплатно: 15 запросов/мин. ИИ анализирует содержание, стиль, структуру.
+          </div>
+
+          <label class="option-check" id="visual-check-option">
+            <input type="checkbox" id="use-visual"> Визуальная проверка страниц (скриншот → ИИ Vision)
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-row">
+      <button class="btn-primary" id="check-btn" disabled>
+        <span class="btn-icon-inner">🔍</span> Начать проверку
+      </button>
+      <div class="check-hint" id="check-hint">Загрузите файл для начала проверки</div>
+    </div>
+  </section>
+
+  <!-- STEP 3: Progress -->
+  <section class="card" id="progress-section" style="display:none">
+    <div class="card-header">
+      <span class="step-badge step-badge-active">3</span>
+      <h2>Анализ документа</h2>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-bar-outer">
+        <div class="progress-bar-inner" id="progress-bar" style="width:0%"></div>
+      </div>
+      <div class="progress-text" id="progress-text">Инициализация...</div>
+    </div>
+    <div id="progress-steps" class="progress-steps"></div>
+  </section>
+
+  <!-- STEP 4: Results -->
+  <section class="card" id="results-section" style="display:none">
+    <div class="card-header">
+      <span class="step-badge step-badge-done">✓</span>
+      <h2>Результаты проверки</h2>
+      <div class="result-actions">
+        <button class="btn-secondary btn-sm" id="export-pdf-btn" title="Печать / сохранить PDF">🖨 PDF</button>
+        <button class="btn-secondary btn-sm" id="copy-btn" title="Копировать в буфер обмена">📋 Копировать</button>
+        <button class="btn-outline btn-sm" id="recheck-btn">🔄 Проверить снова</button>
+      </div>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="summary-grid">
+      <div class="summary-card critical-card">
+        <div class="summary-num" id="critical-count">0</div>
+        <div class="summary-label">Критических</div>
+        <div class="summary-desc">Блокируют защиту</div>
+      </div>
+      <div class="summary-card warning-card">
+        <div class="summary-num" id="warning-count">0</div>
+        <div class="summary-label">Предупреждений</div>
+        <div class="summary-desc">Нужно исправить</div>
+      </div>
+      <div class="summary-card info-card">
+        <div class="summary-num" id="info-count">0</div>
+        <div class="summary-label">Замечаний</div>
+        <div class="summary-desc">Рекомендуется</div>
+      </div>
+      <div class="summary-card pass-card">
+        <div class="summary-num" id="pass-count">0</div>
+        <div class="summary-label">Пройдено</div>
+        <div class="summary-desc">Соответствует СТП</div>
+      </div>
+    </div>
+
+    <!-- Score -->
+    <div class="score-section">
+      <div class="score-circle" id="score-circle">
+        <div class="score-val" id="score-val">–</div>
+        <div class="score-max">/10</div>
+      </div>
+      <div class="score-info">
+        <div class="score-title">Готовность к защите</div>
+        <div class="score-desc" id="score-desc"></div>
+        <div class="score-bar-wrap">
+          <div class="score-bar" id="score-bar"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter tabs -->
+    <div class="filter-tabs">
+      <button class="filter-tab active" data-filter="all">Все</button>
+      <button class="filter-tab" data-filter="critical">❌ Критические</button>
+      <button class="filter-tab" data-filter="warning">⚠️ Предупреждения</button>
+      <button class="filter-tab" data-filter="info">ℹ️ Замечания</button>
+      <button class="filter-tab" data-filter="pass">✅ Пройдено</button>
+    </div>
+
+    <!-- Findings list -->
+    <div id="findings-container" class="findings-container"></div>
+
+    <!-- Document preview -->
+    <details class="preview-section" id="preview-section" style="display:none">
+      <summary>📄 Предварительный просмотр документа</summary>
+      <div id="doc-preview" class="doc-preview-wrap"></div>
+    </details>
+  </section>
+
+</main>
+
+<!-- HELP MODAL -->
+<div id="help-modal" class="modal" style="display:none" role="dialog" aria-modal="true" aria-label="Справка">
+  <div class="modal-box">
+    <button class="modal-close" id="modal-close" aria-label="Закрыть">✕</button>
+    <h2>Справка по приложению</h2>
+    <div class="help-content">
+      <h3>Как пользоваться:</h3>
+      <ol>
+        <li>Загрузите файл <b>.docx</b> (пояснительную записку)</li>
+        <li>При необходимости добавьте чертежи (PDF, PNG, JPG)</li>
+        <li>Включите ИИ-проверку (опционально, бесплатно)</li>
+        <li>Нажмите «Начать проверку»</li>
+      </ol>
+      <h3>Что проверяется:</h3>
+      <ul>
+        <li>Поля страницы (30/15/20/20 мм)</li>
+        <li>Шрифт Times New Roman 14пт, одинарный интервал</li>
+        <li>Абзацный отступ 1,25 см, выравнивание по ширине</li>
+        <li>Обязательные разделы документа</li>
+        <li>Нумерация и формат заголовков</li>
+        <li>Подписи рисунков и таблиц</li>
+        <li>Нумерация страниц (правый нижний угол)</li>
+        <li>Список источников (ГОСТ 7.1-2003)</li>
+        <li>Запрет на Wikipedia</li>
+        <li>Оформление формул, приложений, перечислений</li>
+      </ul>
+      <h3>Об ИИ-проверке:</h3>
+      <p>Использует Google Gemini API (бесплатный уровень: 15 запросов/мин).
+         Ключ хранится только в вашем браузере и напрямую передаётся в Google.
+         Данные документа никуда не отправляются кроме Google Gemini.</p>
+      <h3>Стандарт:</h3>
+      <p>Проверка основана на СТП 01-2024 БГУИР «Дипломные проекты (работы). Общие требования».</p>
+    </div>
+  </div>
+</div>
+
+<!-- Toast notifications -->
+<div id="toast-container" class="toast-container"></div>
+
+<!-- Hidden render area for visual check -->
+<div id="render-area" style="position:absolute;left:-9999px;top:-9999px;width:794px;background:white;"></div>
+
+<!-- ==================== SCRIPTS ==================== -->
+<!-- CDN Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"
+  onerror="console.warn('mammoth not loaded')"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"
+  onerror="console.warn('html2canvas not loaded')"></script>
+
+<!-- App modules -->
+<script src="js/docx-parser.js"></script>
+<script src="js/stp-checker.js"></script>
+<script src="js/ai-checker.js"></script>
+<script src="js/report-generator.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
