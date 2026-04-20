@@ -606,6 +606,23 @@ body {
 /* --- Result actions --- */
 .result-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
+/* На мобилке кнопки результатов переносятся под заголовок */
+@media (max-width: 500px) {
+  .results-card-header {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+  .results-card-header .result-actions {
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: 38px; /* выровнять по тексту заголовка */
+  }
+  .results-card-header .btn-sm {
+    font-size: 12px !important;
+    padding: 7px 12px !important;
+  }
+}
+
 /* --- Preview --- */
 .preview-section { margin: 0 24px 20px; }
 .preview-section summary { cursor: pointer; padding: 10px; background: var(--bg-hover); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; color: var(--text); list-style: none; display: flex; align-items: center; gap: 8px; }
@@ -789,6 +806,199 @@ body {
   .finding-body { display: block !important; }
 
   .summary-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* =============================================================
+   MOBILE STYLES — полная мобильная версия
+   ============================================================= */
+
+/* ── Общие корректировки для небольших экранов ─────────────── */
+@media (max-width: 768px) {
+
+  /* Header */
+  .header-inner {
+    padding: 10px 14px;
+    gap: 10px;
+  }
+  .logo-icon { width: 36px; height: 36px; font-size: 13px; }
+  .logo-title { font-size: 15px; }
+  .logo-sub   { font-size: 10px; }
+  .btn-icon   { width: 32px; height: 32px; font-size: 14px; }
+
+  /* Main layout */
+  .app-main { padding: 12px 10px 60px; gap: 12px; }
+
+  /* Card */
+  .card-header { padding: 14px 16px; gap: 10px; }
+  .card-header h2 { font-size: 14px; }
+
+  /* Drop zone */
+  .drop-zone { margin: 12px; padding: 28px 16px; }
+  .drop-icon  { font-size: 36px; }
+  .drop-title { font-size: 15px; }
+  .drop-sub   { font-size: 12px; }
+  .drop-zone-sm { margin: 0 12px 12px; padding: 14px; }
+  .drop-zone-sm .drop-icon { font-size: 22px; }
+  .drop-zone-sm .drop-title { font-size: 13px; }
+
+  /* File info */
+  .file-info  { margin: 0 12px 12px; padding: 10px 12px; gap: 10px; }
+  .file-icon  { font-size: 22px; }
+  .file-name  { font-size: 13px; }
+  .file-size  { font-size: 11px; }
+
+  /* Drawings */
+  .drawings-section { padding: 0 12px 12px; }
+
+  /* Options grid → одна колонка */
+  .options-grid { grid-template-columns: 1fr; padding: 14px 16px; gap: 16px; }
+
+  /* AI provider tabs — переносятся */
+  .ai-provider-tabs { flex-wrap: wrap; gap: 6px; }
+  .ai-provider-tab  { padding: 6px 12px; font-size: 13px; }
+  .ai-model-select  { min-width: 0; width: 100%; }
+  .ai-model-row     { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .ai-provider-row  { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .ai-select-label  { min-width: auto; }
+
+  /* Action row */
+  .action-row {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 14px 16px 16px;
+    gap: 10px;
+  }
+  .btn-primary { width: 100%; justify-content: center; padding: 13px 20px; font-size: 16px; }
+  .check-hint  { text-align: center; font-size: 12px; }
+
+  /* Progress */
+  .progress-wrap  { padding: 16px; }
+  .progress-steps { padding: 8px 16px 16px; }
+
+  /* Summary grid → 2 колонки */
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+    padding: 14px 14px 8px;
+    gap: 10px;
+  }
+  .summary-num  { font-size: 26px; }
+  .summary-label{ font-size: 12px; }
+  .summary-desc { font-size: 10px; }
+  .summary-card { padding: 12px 10px; }
+
+  /* Score */
+  .score-section {
+    flex-direction: row;
+    padding: 12px 14px;
+    margin: 0 14px 10px;
+    gap: 14px;
+  }
+  .score-circle { width: 60px; height: 60px; }
+  .score-val    { font-size: 18px; }
+  .score-title  { font-size: 14px; }
+  .score-desc   { font-size: 12px; }
+
+  /* Result actions — перенос */
+  .result-actions {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .result-actions .btn-secondary,
+  .result-actions .btn-outline { flex: 1; text-align: center; justify-content: center; min-width: 80px; }
+
+  /* Filter tabs — горизонтальная прокрутка */
+  .filter-tabs {
+    padding: 0 14px 10px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 6px;
+  }
+  .filter-tabs::-webkit-scrollbar { display: none; }
+  .filter-tab { white-space: nowrap; flex-shrink: 0; }
+
+  /* Findings */
+  .findings-container { padding: 0 14px 16px; gap: 6px; }
+  .finding-header { padding: 10px 12px; gap: 10px; }
+  .finding-title  { font-size: 13px; }
+  .finding-meta   { gap: 6px; margin-top: 4px; }
+  .finding-body   { padding: 10px 12px; font-size: 12px; }
+  .finding-goto-btn { font-size: 10px; padding: 3px 8px; }
+
+  /* Preview — горизонтальный скролл */
+  .preview-section { margin: 0 14px 16px; }
+  .doc-preview-wrap {
+    max-height: 500px;
+    overflow: auto;
+    padding: 10px 4px;
+  }
+  .preview-viewer { gap: 12px; }
+  /* На мобилке страница масштабируется */
+  .preview-page {
+    width: 100%;
+    min-width: 320px;
+    min-height: auto;
+    transform-origin: top left;
+  }
+  .preview-page-inner {
+    padding: 28px 20px 28px 40px;
+    font-size: 9pt;
+    line-height: 1.4;
+  }
+  .preview-page-num {
+    bottom: 12px;
+    right: 20px;
+    font-size: 9pt;
+  }
+
+  /* Modal */
+  .modal { padding: 10px; align-items: flex-end; }
+  .modal-box {
+    border-radius: var(--radius) var(--radius) 0 0;
+    max-height: 85vh;
+    padding: 20px 18px;
+  }
+  .modal-box h2 { font-size: 17px; }
+
+  /* Toast — снизу по центру */
+  .toast-container {
+    bottom: 16px;
+    right: 10px;
+    left: 10px;
+    align-items: stretch;
+  }
+  .toast { max-width: 100%; }
+}
+
+/* ── Совсем маленькие телефоны (≤ 375px) ───────────────────── */
+@media (max-width: 375px) {
+  .logo-sub      { display: none; }
+  .logo-title    { font-size: 13px; }
+  .step-badge    { width: 24px; height: 24px; font-size: 11px; }
+  .drop-title    { font-size: 14px; }
+  .btn-primary   { font-size: 15px; }
+  .summary-num   { font-size: 22px; }
+  .ai-provider-tab { padding: 5px 10px; font-size: 12px; }
+}
+
+/* ── Планшеты (768–960px) ────────────────────────────────────── */
+@media (min-width: 641px) and (max-width: 960px) {
+  .app-main    { padding: 16px 16px 40px; }
+  .header-inner{ padding: 12px 16px; }
+  .summary-grid { grid-template-columns: repeat(4, 1fr); }
+  .preview-page { width: 100%; }
+  .preview-page-inner { padding: 40px 30px 40px 55px; font-size: 11pt; }
+}
+
+/* ── touch: Увеличиваем зоны нажатия ───────────────────────── */
+@media (hover: none) and (pointer: coarse) {
+  .option-check { padding: 8px 0; }
+  .filter-tab   { padding: 8px 16px; font-size: 13px; }
+  .finding-header { padding: 14px 12px; }
+  .btn-remove   { width: 36px; height: 36px; }
+  .finding-goto-btn { padding: 5px 12px; font-size: 11px; }
+  .drawing-chip-remove { padding: 2px 8px; font-size: 14px; }
 }
 
 /* --- Utility classes --- */
