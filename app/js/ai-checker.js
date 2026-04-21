@@ -1,4 +1,4 @@
-﻿/**
+/**
  * AI Checker — проверка через различные AI API
  * Поддерживаемые провайдеры:
  *   - Google Gemini  (https://ai.google.dev)
@@ -122,6 +122,52 @@ class AiChecker {
     }
 
     return this._parseJsonResponse(rawText, `Чертёж: ${fileName}`);
+  }
+
+  // ============================================================
+  // Анализ соответствия Заданию на дипломное проектирование
+  // ============================================================
+  async analyzeAssignmentCompliance(apiKey, imageBase64, docData, provider = 'gemini', model = 'gemini-2.0-flash') {
+    if (!apiKey) throw new Error('API ключ не указан');
+    
+    // Берем начало документа (Введение, Содержание, Общие разделы), так как там кроется суть
+    const docTextChunk = docData.fullText.slice(0, 15000); 
+
+    const prompt = `Ты — строгий председатель комиссии и нормоконтролёр БГУИР.
+Тебе предоставлены:
+1. Фотография / скан "Задания на дипломное проектирование" (изображение).
+2. Текст начала пояснительной записки студента (Содержание, Введение, первые разделы).
+
+ТВОЯ ЗАДАЧА: Сверить Задание с фактическим текстом пояснительной записки.
+Обязательно обрати внимание на:
+- Соответствует ли тема дипломного проекта?
+- Все ли пункты из "Перечня подлежащих разработке вопросов" отражены в содержании и тексте записки?
+- Упоминается ли заявленный графический материал?
+- Соответствуют ли исходные данные?
+
+Выведи подробный анализ СТРОГО в формате JSON-массива:
+[
+  {
+    "severity": "critical|warning|info|pass",
+    "description": "конкретное описание совпадения или расхождения",
+    "recommendation": "что нужно исправить (если есть ошибка)"
+  }
+]
+Если всё совпадает идеально, выведи минимум один объект с severity="pass".`;
+
+    let rawText;
+    if (provider === 'gemini') {
+      rawText = await this._callGemini(apiKey, model, {
+        contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: imageBase64 } }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 2500 }
+      });
+    } else if (provider === 'openai') {
+      rawText = await this._callOpenAIVision(apiKey, model, imageBase64, prompt);
+    } else {
+      throw new Error('Сверка с заданием поддерживается только для Gemini и OpenAI (Vision)');
+    }
+
+    return this._parseJsonResponse(rawText, 'Сверка с Заданием');
   }
 
   // ============================================================

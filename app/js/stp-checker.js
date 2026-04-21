@@ -41,7 +41,13 @@ class StpChecker {
     if (opts.checkFormulas)  this._checkFormulas();
     if (opts.checkRefs)      this._checkReferences();
     if (opts.checkText)      this._checkTextRules();
+    if (opts.checkText)      this._checkPunctuationProximity();
+    if (opts.checkText)      this._checkNonBreakingSpaces();
+    if (opts.checkText)      this._checkListPunctuation();
+    if (opts.checkStructure) this._checkH1PageBreaks();
     if (opts.checkFigures)   this._checkAppendices();
+    if (opts.checkFigures)   this._checkTableHeadersAndEmptyCells();
+    if (opts.checkRefs)      this._checkReferenceOrder();
     this._checkPageNumbering();
 
     return this.findings;
@@ -612,6 +618,33 @@ class StpChecker {
     }
   }
 
+  // ============================================================
+  // ПРОВЕРКА H1: НАЧАЛО С НОВОЙ СТРАНИЦЫ (п. 2.2.1)
+  // ============================================================
+  _checkH1PageBreaks() {
+    const headings = this.docData.paragraphs.filter(p => p.headingLevel === 1 && p.textTrimmed);
+    if (headings.length === 0) return;
+
+    let issues = 0;
+    for (let i = 0; i < headings.length; i++) {
+      const h = headings[i];
+      // Первый H1 может не иметь разрыва если он в самом начале
+      if (i === 0 && h.paraIndex < 5) continue;
+
+      if (!h.hasPageBreak) {
+        this._add('warning', 'h1-no-page-break', 'п. 2.2.1',
+          `Заголовок раздела «${h.textTrimmed.slice(0, 50)}» должен начинаться с новой страницы`,
+          'Заголовок раздела',
+          'Перед заголовком раздела 1-го уровня должен быть разрыв страницы: Вставка → Разрыв страницы (или Ctrl+Enter)',
+          this._page(h));
+        issues++;
+      }
+    }
+    if (issues === 0) {
+      this._pass('h1-page-break-ok', 'п. 2.2.1', 'Все разделы 1-го уровня начинаются с новой страницы ✓');
+    }
+  }
+
   _isUnnumberedSection(text) {
     const t = text.toUpperCase();
     return ['ВВЕДЕНИЕ', 'ЗАКЛЮЧЕНИЕ', 'РЕФЕРАТ', 'СОДЕРЖАНИЕ',
@@ -1101,13 +1134,29 @@ class StpChecker {
         'После каждой формулы необходимо расшифровать символы: «где», с новой строки без абзацного отступа (п. 2.4.7)');
     }
 
+    // Проверяем, что номер формулы выровнен вправо (приблизительно по паттерну длинных пробелов или табов)
+    let badFormulasAlignCount = 0;
+    for (const f of formulas) {
+      // Ищем наличие большого пробела/таба перед (N)
+      if (!/\s{3,}\(\d+\.\d+\)$/.test(f.textTrimmed) && !/\t\(\d+\.\d+\)$/.test(f.textTrimmed)) {
+        badFormulasAlignCount++;
+      }
+    }
+    
+    if (badFormulasAlignCount > 0) {
+      this._add('warning', 'formula-alignment', 'п. 2.4.6',
+        `Слишком малое расстояние между формулой и номером у ${badFormulasAlignCount} формул`,
+        'Формулы',
+        'Номер формулы (N.N) должен быть выровнен по правому краю страницы (используйте позицию табуляции по правому краю).');
+    }
+    
     // Ссылки на формулы в тексте
     const hasFormulaRefs = /формул[еуи]\s*\([^)]+\)|уравнени[еи]\s*\(|выражени[еи]\s*\(/.test(fullText);
     if (!hasFormulaRefs && formulas.length > 0) {
       this._add('info', 'formula-no-refs', 'п. 2.4.7',
-        'Не обнаружены ссылки на формулы в тексте',
+        'Не обнаружены ссылки на формулы в тексте. Если они присутствуют, проверьте правильность оформления (со словом «формула»)',
         'Ссылки на формулы',
-        'Ссылайтесь на формулы: «подставляя в формулу (2.1)...» или «из выражения (2.7)...»');
+        'На все формулы необходимо ссылаться: «подставляя в формулу (2.1)...»');
     }
   }
 
@@ -1153,32 +1202,47 @@ class StpChecker {
       this._pass('refs-no-wiki', 'п. 1.2.16', 'Wikipedia в списке источников не обнаружена ✓');
     }
 
-    // Проверяем формат записей по ГОСТ 7.1-2003
-    // Признак: запись начинается с [N] или просто N
-    let wrongFormatCount = 0;
+    // Проверяем формат записей по ГОСТ 7.1-2003 / 7.0.100-2018
+    let missingSlashesCount = 0;
+    let missingDashesCount = 0;
+    let missingBracketCount = 0;
     let goodFormatCount = 0;
 
-    for (const para of refParas.slice(0, 20)) {
+    for (const para of refParas.slice(0, 30)) {
       const text = para.textTrimmed;
       if (!text) continue;
 
-      // Паттерн ГОСТ: [N] Автор, Инициалы. Название / ... – Место : Издательство, Год. – N с.
-      // Или просто начинается с порядкового номера
-      const isNumbered = /^\[\d+\]/.test(text) || /^\d+\s/.test(text);
+      const isNumbered = /^\[?\d+\]?\s/.test(text);
       if (isNumbered) {
         goodFormatCount++;
-        // Проверяем наличие тире-разделителя по ГОСТ
-        if (!text.includes(' – ') && !text.includes(' — ') && !text.includes(' : ')) {
-          wrongFormatCount++;
-        }
+        // Строгие проверки ГОСТ 7.1 / 7.0.100
+        if (!text.includes('//') && !text.includes('URL') && !text.includes('/')) missingSlashesCount++;
+        if (!text.includes(' – ') && !text.includes(' — ') && !text.includes(' - ')) missingDashesCount++;
+        if (!text.includes('[Текст]') && !text.includes('[Электронный ресурс]')) missingBracketCount++;
       }
     }
 
-    if (wrongFormatCount > goodFormatCount * 0.5 && goodFormatCount > 2) {
-      this._add('warning', 'refs-format', 'п. 2.8.5',
-        `${wrongFormatCount} записей в списке источников могут не соответствовать ГОСТ 7.1-2003`,
-        'Список использованных источников',
-        'Оформляйте источники по ГОСТ 7.1-2003: Фамилия, И.О. Название / Соавторы. – Место : Изд-во, Год. – N с.');
+    if (goodFormatCount > 0) {
+       this._pass('refs-found', 'п. 2.8', `Найдено ~${refParas.length} источников в списке ✓`);
+       
+       if (missingSlashesCount > goodFormatCount * 0.5) {
+         this._add('warning', 'refs-format-slashes', 'п. 2.8.5 (ГОСТ 7.1)',
+           `В ${missingSlashesCount} из ${goodFormatCount} записей отсутствует знак косой черты (// или /) после заглавия`,
+           'Список источников',
+           'По ГОСТу знак косой черты отделяет заглавие от сведений об ответственности: Название / Автор');
+       }
+       if (missingDashesCount > goodFormatCount * 0.5) {
+         this._add('warning', 'refs-format-dashes', 'п. 2.8.5 (ГОСТ 7.1)',
+           `В ${missingDashesCount} записях отсутствуют обязательные тире (–), отделяющие элементы описания`,
+           'Список источников',
+           'ГОСТ требует разделять области библиографического описания знаком « – » (пробел-тире-пробел)');
+       }
+       if (missingBracketCount > goodFormatCount * 0.5) {
+         this._add('info', 'refs-format-brackets', 'п. 2.8.5 (ГОСТ 7.1)',
+           'Большинство источников не содержит общего обозначения материала ([Текст] или [Электронный ресурс])',
+           'Список источников',
+           'В новых редакциях ГОСТа это не всегда обязательно, но по классическому ГОСТ 7.1-2003 рекомендуется указывать [Текст] сразу после названия работы.');
+       }
     }
 
     if (refParas.length > 0 && !hasWikipedia) {
@@ -1522,5 +1586,296 @@ class StpChecker {
         'Нумерация страниц',
         'Вставьте номер страницы: Вставка → Номер страницы → Внизу страницы → Справа от полей');
     }
+
+    // Проверка начальной страницы (п. 2.2.8)
+    if (this.docData.pageSettings?.pageNumberStart === 1) {
+        this._add('info', 'page-num-start-1', 'п. 2.2.8',
+          'Нумерация начинается с 1. Убедитесь, что на Титульном листе и Задании номер не отображается',
+          'Нумерация страниц',
+          'Титульный лист и задание считаются, но не нумеруются. Номер «3» обычно ставится на Реферате или Содержании.');
+    }
+  }
+
+  // ============================================================
+  // ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА ТАБЛИЦ (ШАПКИ И ПУСТОТЫ)
+  // ============================================================
+  _checkTableHeadersAndEmptyCells() {
+    const paras = this.docData.paragraphs.filter(p => p.inTable);
+    if (paras.length === 0) return;
+
+    const tables = {};
+    for (const p of paras) {
+      if (!tables[p.tableIndex]) tables[p.tableIndex] = { rows: {} };
+      if (!tables[p.tableIndex].rows[p.rowIndex]) tables[p.tableIndex].rows[p.rowIndex] = [];
+      tables[p.tableIndex].rows[p.rowIndex].push(p);
+    }
+
+    let headerIssues = 0;
+    let emptyCellIssues = 0;
+
+    for (const [tIdx, table] of Object.entries(tables)) {
+      // Проверка первой строки (шапки) на жирность
+      const firstRow = table.rows[0];
+      if (firstRow) {
+        const anyBold = firstRow.some(p => p.effectiveRPr?.bold || p.firstRunRPr?.bold);
+        if (!anyBold && firstRow.some(p => p.textTrimmed.length > 1)) {
+          this._add('info', `table-${tIdx}-header-not-bold`, 'п. 2.6.4',
+            `Заголовочная строка таблицы №${parseInt(tIdx) + 1} не выделена жирным`,
+            `Таблица №${parseInt(tIdx) + 1}`,
+            'Рекомендуется выделять головку (первую строку) таблицы полужирным шрифтом',
+            this._page(firstRow[0]));
+          headerIssues++;
+        }
+      }
+
+      // Проверка на пустые ячейки (п. 2.6.10)
+      for (const [rIdx, row] of Object.entries(table.rows)) {
+        const cells = {};
+        for (const p of row) {
+          if (!cells[p.cellIndex]) cells[p.cellIndex] = [];
+          cells[p.cellIndex].push(p);
+        }
+
+        for (const [cIdx, cellParas] of Object.entries(cells)) {
+          const combinedText = cellParas.map(p => p.textTrimmed).join('');
+          if (combinedText === '') {
+            emptyCellIssues++;
+            if (emptyCellIssues <= 5) {
+              this._add('warning', 'table-empty-cell', 'п. 2.6.10',
+                `Пустая ячейка в таблице (строка ${parseInt(rIdx)+1}, столбец ${parseInt(cIdx)+1})`,
+                'Таблицы',
+                'Пустые ячейки в таблицах не допускаются. Ставьте прочерк или пишите «Нет» (п. 2.6.10)',
+                this._page(cellParas[0]));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // ============================================================
+  // ПОРЯДОК ССЫЛОК В ТЕКСТЕ (п. 2.8.2)
+  // ============================================================
+  _checkReferenceOrder() {
+    const fullText = this.docData.fullText;
+    const matches = [...fullText.matchAll(/\[(\d+)\]/g)];
+    if (matches.length < 2) return;
+
+    const refs = matches.map(m => parseInt(m[1]));
+    let maxSeen = 0;
+
+    for (const num of refs) {
+      if (num > maxSeen) {
+        maxSeen = num;
+      }
+    }
+
+    if (refs[0] > 3) {
+      this._add('info', 'refs-start-not-one', 'п. 2.8.2',
+        `Первая ссылка в тексте — [${refs[0]}]. Обычно ссылки начинаются с [1]`,
+        'Список источников',
+        'Убедитесь, что источники нумеруются в порядке первого упоминания в тексте');
+    }
+  }
+
+  // ============================================================
+  // НЕРАЗРЫВНЫЕ ПРОБЕЛЫ (п. 2.3.12)
+  // ============================================================
+  _checkNonBreakingSpaces() {
+    const fullText = this.docData.fullText;
+    const unitMatches = fullText.match(/\d+\s+(мм|см|кг|Вт|кВт|Гц|МГц|кб|МБ|ГБ|нс|мкс|мс|кОм|нФ|мкФ)/g) || [];
+    
+    if (unitMatches.length > 10) {
+       this._add('info', 'nbsp-recommendation', 'п. 2.3.12',
+         'В документе много единиц измерения. Убедитесь, что между числом и единицей стоит неразрывный пробел',
+         'Текст',
+         'Используйте Ctrl+Shift+Space для вставки неразрывного пробела между числом и единицей (например, 10 мм)');
+    }
+  }
+
+  // ============================================================
+  // ПУНКТУАЦИЯ В СПИСКАХ (регистр и знаки) (п. 2.3.5)
+  // ============================================================
+  _checkListPunctuation() {
+    const paras = this.docData.paragraphs;
+
+    for (let i = 0; i < paras.length; i++) {
+        const p = paras[i];
+        const text = p.textTrimmed;
+        const isBullet = text.startsWith('–') || text.startsWith('—') || text.startsWith('-');
+
+        if (isBullet) {
+            const content = text.replace(/^[–—-]\s*/, '').trim();
+            if (!content) continue;
+
+            const next = paras[i+1];
+            const nextIsBullet = next ? (next.textTrimmed.startsWith('–') || next.textTrimmed.startsWith('—') || next.textTrimmed.startsWith('-')) : false;
+
+            if (nextIsBullet) {
+                if (!text.endsWith(';') && !text.endsWith(',')) {
+                    // Пропускаем
+                }
+                const firstChar = content[0];
+                if (firstChar && firstChar === firstChar.toUpperCase() && firstChar !== firstChar.toLowerCase()) {
+                    if (content.length > 10 && !/^[А-Я]/.test(content)) { // Упрощенная проверка
+                        this._add('info', 'list-item-upper', 'п. 2.3.5',
+                          `Пункт перечисления начинается с прописной буквы: «${content.slice(0, 30)}...»`,
+                          'Перечисления',
+                          'Пункты перечисления, разделенные точкой с запятой, обычно пишутся со строчной (маленькой) буквы',
+                          this._page(p));
+                    }
+                }
+            } else if (i > 0 && (paras[i-1].textTrimmed.startsWith('–') || paras[i-1].textTrimmed.startsWith('—'))) {
+                if (!text.endsWith('.')) {
+                    this._add('warning', 'list-last-no-dot', 'п. 2.3.5',
+                      'Последний пункт перечисления должен заканчиваться точкой',
+                      'Перечисления',
+                      'Поставьте точку в конце последнего пункта перечисления',
+                      this._page(p));
+                }
+            }
+        }
+    }
+  }
+
+  // ============================================================
+  // ПРОБЕЛЫ ВОЗЛЕ ЗНАКОВ ПРЕПИНАНИЯ (п. 2.1.1)
+  // ============================================================
+  _checkPunctuationProximity() {
+    const paras = this.docData.paragraphs.filter(p => !p.isEmpty && !p.isHeading);
+    let gluedIssues = 0;
+
+    for (const p of paras) {
+        const text = p.textTrimmed;
+        const gluedMatch = text.match(/[а-яё],[а-яё]|[а-яё]\.[А-ЯЁа-яё]{4,}/g);
+        if (gluedMatch) {
+            gluedIssues += gluedMatch.length;
+            if (gluedIssues <= 3) {
+                this._add('warning', 'glued-punctuation', 'п. 2.1.1',
+                  `Возможно, отсутствует пробел после знака препинания: «${gluedMatch[0]}»`,
+                  'Текст',
+                  'После точки, запятой, точки с запятой всегда ставится пробел',
+                  this._page(p));
+        }
+      }
+    }
+  }
+
+  // ============================================================
+  // СВЕРКА С ЗАДАНИЕМ НА ДИПЛОМНОЕ ПРОЕКТИРОВАНИЕ (БЕЗ ИИ)
+  // ============================================================
+  checkAssignmentCompliance(mainDocData, assignmentDocData) {
+    const localFindings = [];
+    const addAssFinding = (severity, id, desc, rec) => {
+      localFindings.push({ severity, id, section: 'Сверка с Заданием', description: desc, location: 'Задание', recommendation: rec, source: 'programmatic' });
+    };
+
+    const docText = mainDocData.fullText || '';
+    const assText = assignmentDocData.fullText || '';
+    
+    // Функция нормализации для игнорирования запятых, регистров и "ё"
+    const normalize = (str) => str.toLowerCase().replace(/ё/g, 'е').replace(/[^а-яa-z0-9]/gi, '');
+    const normDoc = normalize(docText);
+
+    if (!assignmentDocData || !assignmentDocData.paragraphs) {
+      addAssFinding('error', 'assignment-parse', 'Не удалось разобрать текст файла Задания.', 'Проверьте формат файла.');
+      return localFindings;
+    }
+
+    // 1. Извлечение темы. Ищем кавычки (часто ёлочки « »)
+    let themeFromAssignment = null;
+    const themeMatch = assText.match(/(?:Тема\s+(?:проекта|работы).*?[«"”](.+?)[»"”])/i);
+    if (themeMatch) {
+       themeFromAssignment = themeMatch[1].trim();
+    } else {
+       // Запасной: ищем до точки
+       const themeMatch2 = assText.match(/Тема\s+(?:проекта|работы)?\s*(?::|-|—)\s*([^\n\.]+)/i);
+       if (themeMatch2) themeFromAssignment = themeMatch2[1].trim();
+    }
+
+    // 2. Извлечение "содержание расчетно-пояснительной записки"
+    let questions = [];
+    const contentBlockMatch = assText.match(/(?:Содержание расчетно-пояснительной записки|Перечень подлежащих разработке вопросов)[\s\S]*?(?:Перечень графического материала|Консультанты по дипломному)/i);
+    if (contentBlockMatch) {
+       const block = contentBlockMatch[0];
+       // В задании пункты идут чередой вида "4.1. Анализ... 4.2. Разработка..."
+       const items = Array.from(block.matchAll(/(?:^|\n|\s)(?:4|[1235])\.\d+(?:\.\d+)?\.\s*([A-ZА-ЯЁ][^\.\d]+)/g));
+       if (items.length > 0) {
+           questions = items.map(m => m[1].trim());
+       } else {
+           // Запасной поиск
+           const itemsFallback = Array.from(block.matchAll(/(?:^|\n)\s*(?:\d+[\.)]|[-•])\s*([^\n\.]+)/g));
+           questions = itemsFallback.map(m => m[1].trim());
+       }
+    }
+
+    // 3. Извлечение пунктов "Перечень графического материала"
+    let graphicsParts = [];
+    const graphicsBlockMatch = assText.match(/Перечень графического материала[\s\S]*?(?:Консультанты по дипломному|Календарный план)/i);
+    if (graphicsBlockMatch) {
+        const gBlock = graphicsBlockMatch[0];
+        // Подпункты вида "5.1. IDEF0 диаграмма"
+        const items = Array.from(gBlock.matchAll(/(?:^|\n|\s)5\.\d+\.\s*([A-ZА-ЯЁ][^\(]+)/g));
+        if (items.length > 0) {
+            graphicsParts = items.map(m => m[1].trim());
+        }
+    }
+
+    // --- ПРОВЕРКИ ---
+
+    // 1. Проверка темы
+    if (themeFromAssignment && themeFromAssignment.length > 5) {
+      const normTheme = normalize(themeFromAssignment);
+      if (normDoc.includes(normTheme)) {
+        addAssFinding('pass', 'assignment-theme', 'Тема из задания точно совпадает с темой в документе', null);
+      } else {
+        const words = themeFromAssignment.toLowerCase().split(/\s+/).filter(w => w.length > 4);
+        let foundWords = 0;
+        words.forEach(w => { if (docText.toLowerCase().includes(w)) foundWords++; });
+        
+        if (words.length > 0 && (foundWords / words.length) >= 0.7) {
+          addAssFinding('warning', 'assignment-theme-partial', 'Имеются небольшие отличия в Теме (между Заданием и Запиской).', `Тема в задании: «${themeFromAssignment}»`);
+        } else {
+          addAssFinding('critical', 'assignment-theme-missing', 'Тема из задания НЕ найдена в пояснительной записке.', `В задании: «${themeFromAssignment}». Проверьте титульный лист и введение.`);
+        }
+      }
+    } else {
+      addAssFinding('info', 'assignment-theme-not-found', 'Не удалось автоматически разобрать "Тему проекта" в файле задания.', null);
+    }
+
+    // 2. Проверка пунктов (Содержание пояснительной записки)
+    if (questions.length > 0) {
+      let missingItems = [];
+      questions.forEach(q => {
+        if (!normDoc.includes(normalize(q))) {
+          missingItems.push(q);
+        }
+      });
+      if (missingItems.length > 0) {
+        addAssFinding('warning', 'assignment-questions-missing', `Не все разделы из Задания присутствуют в пояснительной записке (${missingItems.length} разделов отсутствует).`, `Записка должна строго содержать: ${missingItems.slice(0, 3).join('; ')}...`);
+      } else {
+        addAssFinding('pass', 'assignment-questions', `Все обязательные разделы Задания (${questions.length} шт.) отражены в тексте записки`, null);
+      }
+    } else {
+      addAssFinding('info', 'assignment-questions-not-found', 'Не удалось извлечь пункт "Содержание расчетно-пояснительной записки".', null);
+    }
+
+    // 3. Проверка графического материала
+    if (graphicsParts.length > 0) {
+       let missingGraphics = [];
+       graphicsParts.forEach(g => {
+           if (!normDoc.includes(normalize(g))) missingGraphics.push(g);
+       });
+       if (missingGraphics.length > 0) {
+           addAssFinding('info', 'assignment-graphics-missing', `В тексте записки отсутствуют упоминания заявленного графического материала (${missingGraphics.length} шт.)`, `Не найдено: ${missingGraphics.slice(0, 3).join('; ')}... (рекомендуется добавить названия плакатов/схем в текст)`);
+       } else {
+           addAssFinding('pass', 'assignment-graphics', `Упоминания всех чертежей и плакатов найдены в тексте`, null);
+       }
+    } else if (graphicsBlockMatch && normDoc.indexOf('чертеж') === -1 && normDoc.indexOf('схем') === -1) {
+       addAssFinding('warning', 'assignment-graphics-general', 'В задании есть графический материал, но в тексте записки мало упоминаний чертежей или схем.', 'Отсутствуют ссылки на плакаты в тексте.');
+    }
+
+    return localFindings;
   }
 }
+

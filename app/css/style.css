@@ -630,6 +630,24 @@ body {
 .preview-section summary::before { content: '▶'; font-size: 10px; transition: transform 0.2s; }
 .preview-section[open] summary::before { transform: rotate(90deg); }
 
+.preview-warning {
+  margin: 12px;
+  padding: 14px 18px;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-sm);
+  color: var(--warning);
+  font-size: 13px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  line-height: 1.5;
+}
+.preview-warning .warning-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
 .doc-preview-wrap {
   margin-top: 12px;
   border: 1px solid var(--border);
@@ -999,6 +1017,66 @@ body {
   .btn-remove   { width: 36px; height: 36px; }
   .finding-goto-btn { padding: 5px 12px; font-size: 11px; }
   .drawing-chip-remove { padding: 2px 8px; font-size: 14px; }
+}
+
+/* --- Footer --- */
+.app-footer {
+  margin-top: 40px;
+  padding: 24px 0;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+.footer-content {
+  font-size: 13px;
+  color: var(--text-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.footer-sep { opacity: 0.3; }
+.footer-content b { color: var(--text-muted); }
+
+/* --- Help Developer Block --- */
+.help-developer {
+  margin-top: 24px;
+}
+.dev-divider {
+  height: 1px;
+  background: var(--border);
+  margin-bottom: 20px;
+}
+.dev-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--bg-hover);
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.dev-avatar {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, var(--accent), var(--primary));
+  color: white;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  box-shadow: 0 4px 10px rgba(41,121,255,0.3);
+}
+.dev-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.dev-status {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 /* --- Utility classes --- */

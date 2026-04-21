@@ -57,6 +57,29 @@
       <button class="btn-remove" id="remove-file" title="Удалить файл">✕</button>
     </div>
 
+    <!-- Assignment file (optional) -->
+    <div class="assignment-section" style="margin-top: 15px;">
+      <div class="section-divider">
+        <span>Задание на дипломное проектирование (сверка содержания)</span>
+      </div>
+      <div id="assignment-drop-zone" class="drop-zone drop-zone-sm">
+        <div class="drop-icon">📋</div>
+        <div class="drop-title">Загрузите Задание (.docx)</div>
+        <div class="drop-sub">Нажмите или перетащите файл Word</div>
+        <input type="file" id="assignment-input" accept=".docx" style="display:none" aria-label="Выберите файл задания">
+      </div>
+      
+      <!-- Assignment File info -->
+      <div id="assignment-info" class="file-info" style="display:none">
+        <div class="file-icon">📋</div>
+        <div class="file-details">
+          <div id="assignment-file-name" class="file-name"></div>
+          <div id="assignment-file-size" class="file-size"></div>
+        </div>
+        <button class="btn-remove" id="remove-assignment" title="Удалить файл">✕</button>
+      </div>
+    </div>
+
     <!-- Drawing files (optional) -->
     <div class="drawings-section">
       <div class="section-divider">
@@ -232,10 +255,25 @@
     <!-- Document preview -->
     <details class="preview-section" id="preview-section" style="display:none">
       <summary>📄 Предварительный просмотр документа</summary>
+      <div class="preview-warning">
+        <span class="warning-icon">⚠️</span>
+        <div>
+          <strong>Внимание:</strong> Предварительный просмотр может отличаться от оригинала в Microsoft Word. 
+          Алгоритмы проверки анализируют структуру файла напрямую, поэтому для исправления ошибок всегда ориентируйтесь на оригинальный документ.
+        </div>
+      </div>
       <div id="doc-preview" class="doc-preview-wrap"></div>
     </details>
   </section>
-
+ 
+  <!-- FOOTER -->
+  <footer class="app-footer">
+    <div class="footer-content">
+      <span>&copy; 2024 БГУИР Нормоконтроль</span>
+      <span class="footer-sep">|</span>
+      <span>Разработка: <b>Муртазоев Толмас</b> (кафедра ФКП)</span>
+    </div>
+  </footer>
 </main>
 
 <!-- HELP MODAL -->
@@ -270,6 +308,17 @@
          Данные документа никуда не отправляются кроме Google Gemini.</p>
       <h3>Стандарт:</h3>
       <p>Проверка основана на СТП 01-2024 БГУИР «Дипломные проекты (работы). Общие требования».</p>
+ 
+      <div class="help-developer">
+        <div class="dev-divider"></div>
+        <div class="dev-info">
+          <div class="dev-avatar">ТМ</div>
+          <div>
+            <div class="dev-name">Муртазоев Толмас</div>
+            <div class="dev-status">студент БГУИР, кафедра ФКП</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>

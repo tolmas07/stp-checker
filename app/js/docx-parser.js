@@ -441,22 +441,34 @@ class DocxParser {
     return paragraphs;
   }
 
-  _traverseParagraphs(node, result, styles, defaultStyle, inTable) {
+  _traverseParagraphs(node, result, styles, defaultStyle, tableInfo = null) {
+    let rowIndex = -1;
+    let cellIndex = -1;
+
     for (const child of node.childNodes) {
       const localName = child.localName || child.nodeName.replace('w:', '');
 
       if (localName === 'p') {
-        const para = this._parseParagraph(child, styles, defaultStyle, inTable);
+        const para = this._parseParagraph(child, styles, defaultStyle, tableInfo);
         result.push(para);
       } else if (localName === 'tbl') {
-        this._traverseParagraphs(child, result, styles, defaultStyle, true);
-      } else if (localName === 'tc' || localName === 'tr' || localName === 'sdt') {
-        this._traverseParagraphs(child, result, styles, defaultStyle, inTable);
+        // Инициализируем инфо о таблице
+        const thisTblIdx = (tableInfo ? tableInfo.tableIndex + 1 : 0); // Упрощенно, вложенные таблицы редки
+        this._traverseParagraphs(child, result, styles, defaultStyle, { tableIndex: thisTblIdx, rowIndex: -1, cellIndex: -1 });
+      } else if (localName === 'tr') {
+        rowIndex++;
+        cellIndex = -1;
+        this._traverseParagraphs(child, result, styles, defaultStyle, { ...tableInfo, rowIndex });
+      } else if (localName === 'tc') {
+        cellIndex++;
+        this._traverseParagraphs(child, result, styles, defaultStyle, { ...tableInfo, rowIndex, cellIndex });
+      } else if (localName === 'sdt' || localName === 'body') {
+        this._traverseParagraphs(child, result, styles, defaultStyle, tableInfo);
       }
     }
   }
 
-  _parseParagraph(pNode, styles, defaultStyle, inTable) {
+  _parseParagraph(pNode, styles, defaultStyle, tableInfo) {
     const pPrEl = XML.el(pNode, 'pPr');
     const pPr = pPrEl ? this._parsePPr(pPrEl) : null;
 
@@ -561,7 +573,10 @@ class DocxParser {
       style,
       isHeading,
       headingLevel,
-      inTable,
+      inTable: !!tableInfo,
+      tableIndex: tableInfo ? tableInfo.tableIndex : -1,
+      rowIndex: tableInfo ? tableInfo.rowIndex : -1,
+      cellIndex: tableInfo ? tableInfo.cellIndex : -1,
       isEmpty: fullText.trim() === '',
       isPageNumberField,
       hasPageBreak: hasExplicitPageBreak || (pPr?.pageBreakBefore === true),

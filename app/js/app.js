@@ -7,6 +7,7 @@ class App {
 
   constructor() {
     this.docxFile = null;
+    this.assignmentFile = null;
     this.drawingFiles = [];
     this.findings = [];
     this.docData = null;
@@ -34,6 +35,13 @@ class App {
     this.drawingsZone   = document.getElementById('drawings-drop-zone');
     this.drawingsInput  = document.getElementById('drawings-input');
     this.drawingsList   = document.getElementById('drawings-list');
+
+    this.assignmentZone = document.getElementById('assignment-drop-zone');
+    this.assignmentInput = document.getElementById('assignment-input');
+    this.assignmentInfo  = document.getElementById('assignment-info');
+    this.assFileName     = document.getElementById('assignment-file-name');
+    this.assFileSize     = document.getElementById('assignment-file-size');
+    this.removeAssBtn    = document.getElementById('remove-assignment');
 
     this.useAiChk       = document.getElementById('use-ai');
     this.aiOptions      = document.getElementById('ai-options');
@@ -115,6 +123,24 @@ class App {
       for (const f of e.dataTransfer.files) this._addDrawing(f);
     });
 
+    // --- Assignment ---
+    if (this.assignmentZone) {
+      this.assignmentZone.addEventListener('click', () => this.assignmentInput.click());
+      this.assignmentInput.addEventListener('change', (e) => {
+        if (e.target.files[0]) this._setAssignment(e.target.files[0]);
+      });
+      this.assignmentZone.addEventListener('dragover',  (e) => { e.preventDefault(); this.assignmentZone.classList.add('drag-over'); });
+      this.assignmentZone.addEventListener('dragleave', () => this.assignmentZone.classList.remove('drag-over'));
+      this.assignmentZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        this.assignmentZone.classList.remove('drag-over');
+        if (e.dataTransfer.files[0]) this._setAssignment(e.dataTransfer.files[0]);
+      });
+      if (this.removeAssBtn) {
+        this.removeAssBtn.addEventListener('click', () => this._removeAssignment());
+      }
+    }
+
     // --- AI toggle ---
     this.useAiChk.addEventListener('change', () => {
       this.aiOptions.style.display = this.useAiChk.checked ? '' : 'none';
@@ -188,6 +214,26 @@ class App {
         }
       }
     });
+
+    // --- Save Options to LocalStorage ---
+    Object.keys(this.optChecks).forEach(key => {
+      if (this.optChecks[key]) {
+        this.optChecks[key].addEventListener('change', () => {
+          try {
+            const settings = JSON.parse(localStorage.getItem('stp_check_options') || '{}');
+            settings[key] = this.optChecks[key].checked;
+            localStorage.setItem('stp_check_options', JSON.stringify(settings));
+          } catch (e) { /* ignore */ }
+        });
+      }
+    });
+
+    // Save AI visual check option
+    if (this.useVisualChk) {
+      this.useVisualChk.addEventListener('change', () => {
+         localStorage.setItem('stp_ai_visual', this.useVisualChk.checked);
+      });
+    }
   }
 
   // ============================================================
@@ -216,6 +262,23 @@ class App {
         if (oldEnc) this.apiKeyInput.value = atob(oldEnc);
       } else if (enc.length > 5) {
         this.apiKeyInput.value = atob(enc);
+      }
+    } catch (e) { /* ignore */ }
+
+    // Загрузка состояния чекбоксов
+    try {
+      const settings = JSON.parse(localStorage.getItem('stp_check_options'));
+      if (settings) {
+        Object.keys(this.optChecks).forEach(key => {
+          if (settings[key] !== undefined && this.optChecks[key]) {
+             this.optChecks[key].checked = !!settings[key];
+          }
+        });
+      }
+      // Загрузка состояния визуальной проверки
+      if (this.useVisualChk) {
+         const vis = localStorage.getItem('stp_ai_visual');
+         if (vis !== null) this.useVisualChk.checked = (vis === 'true');
       }
     } catch (e) { /* ignore */ }
   }
@@ -323,6 +386,30 @@ class App {
     `).join('');
   }
 
+  _setAssignment(file) {
+    if (!file.name.toLowerCase().endsWith('.docx')) {
+      this._toast(`Требуется файл .docx (загружен ${file.name})`, 'error');
+      return;
+    }
+    this.assignmentFile = file;
+    
+    if (this.assFileName) this.assFileName.textContent = file.name;
+    if (this.assFileSize) this.assFileSize.textContent = this._formatSize(file.size);
+    
+    if (this.assignmentZone) this.assignmentZone.style.display = 'none';
+    if (this.assignmentInfo) this.assignmentInfo.style.display = 'flex';
+
+    this._toast(`Задание загружено: ${file.name}`, 'success');
+  }
+
+  _removeAssignment() {
+    this.assignmentFile = null;
+    this.assignmentInput.value = '';
+    
+    if (this.assignmentZone) this.assignmentZone.style.display = 'flex';
+    if (this.assignmentInfo) this.assignmentInfo.style.display = 'none';
+  }
+
   // ============================================================
   // ЗАПУСК ПРОВЕРКИ
   // ============================================================
@@ -347,6 +434,7 @@ class App {
       { id: 'headings',  label: 'Проверка заголовков и содержания' },
       { id: 'figures',   label: 'Проверка рисунков и таблиц' },
       { id: 'refs',      label: 'Проверка списка источников' },
+      ...(this.assignmentFile ? [{ id: 'assignment', label: 'Сверка пояснительной с Заданием' }] : []),
       ...(useAi ? [{ id: 'ai',  label: `ИИ-анализ (${providerName} / ${aiModel})` }] : []),
       ...(useVisual ? [{ id: 'visual', label: 'Визуальная проверка страниц' }] : []),
       ...(hasDrawings ? [{ id: 'drawings', label: 'Проверка чертежей' }] : []),
@@ -380,31 +468,73 @@ class App {
       this._setStep('figures',   'done', 65);
       this._setStep('refs',      'done', 70);
 
-      // --- Шаг 7: ИИ анализ ---
+      // --- Шаг 7: Сверка с Заданием (без ИИ) ---
+      if (this.assignmentFile) {
+        this._setStep('assignment', 'running', 71);
+        try {
+          const assignmentDocData = await this.parser.parse(this.assignmentFile);
+          const assFindings = this.checker.checkAssignmentCompliance(this.docData, assignmentDocData);
+          
+          // Проверяем, были ли найдены ошибки / предупреждения
+          const hasErrors = assFindings.some(f => f.severity === 'warning' || f.severity === 'critical');
+          
+          if (!hasErrors) {
+             assFindings.unshift({
+                severity: 'info',
+                id: 'assignment-success',
+                section: 'Сверка с Заданием',
+                description: 'Сверка с Заданием прошла успешно! Тема, обязательные разделы и упомянутые чертежи строго соблюдены в тексте записки.',
+                location: 'Задание',
+                recommendation: 'Ошибок или несоответствий не найдено.',
+                source: 'programmatic'
+             });
+          } else {
+             assFindings.unshift({
+                severity: 'info',
+                id: 'assignment-executed',
+                section: 'Сверка с Заданием',
+                description: 'Алгоритм успешно проанализировал Задание на проектирование и выявил некоторые расхождения (см. Ошибки/Предупреждения ниже).',
+                location: 'Задание',
+                recommendation: 'Обязательно устраните критические ошибки, связанные с заданием.',
+                source: 'programmatic'
+             });
+          }
+          
+          this.findings.push(...assFindings);
+          this._setStep('assignment', 'done', 72);
+        } catch (assErr) {
+          this._setStep('assignment', 'done', 72);
+          this._toast(`Ошибка проверки задания: ${assErr.message}`, 'error');
+        }
+      }
+
+      // --- Шаг 8: ИИ анализ ---
       if (useAi && apiKey) {
-        this._setStep('ai', 'running', 72);
+        this._setStep('ai', 'running', 75);
         try {
           const aiFindings = await this.aiChecker.analyzeDocument(apiKey, this.docData, aiProvider, aiModel);
           this.findings.push(...aiFindings);
           this._setStep('ai', 'done', 82);
         } catch (aiErr) {
           this._setStep('ai', 'done', 82);
-          this._toast(`ИИ-ошибка: ${aiErr.message}`, 'error');
+          const friendlyMsg = this._translateAiError(aiErr.message);
+          this._toast(`ИИ-ошибка: ${friendlyMsg}`, 'error');
           this.findings.push({
             severity: 'info',
             id: 'ai-error',
             section: 'ИИ-анализ',
-            description: `ИИ-проверка не выполнена: ${aiErr.message}`,
-            location: 'Gemini API',
-            recommendation: 'Проверьте правильность API ключа. Ключ можно получить бесплатно на aistudio.google.com',
+            description: `ИИ-проверка не выполнена: ${friendlyMsg}`,
+            location: 'API Провайдер',
+            recommendation: 'Если вы используете бесплатный Gemini — подождите 1 минуту. Если платный OpenAI/DeepSeek — проверьте баланс.',
             source: 'ai'
           });
         }
       }
 
-      // --- Шаг 8: Визуальная проверка ---
+      // --- Шаг 9: Визуальная проверка ---
       if (useVisual && apiKey && this.docData.htmlContent) {
         this._setStep('visual', 'running', 84);
+        await this._sleep(4000); // Пауза для обхода квот (15 RPM)
         try {
           const base64 = await AiChecker.captureDocumentPage(this.docData.htmlContent);
           if (base64) {
@@ -414,7 +544,8 @@ class App {
           this._setStep('visual', 'done', 88);
         } catch (visErr) {
           this._setStep('visual', 'done', 88);
-          this._toast(`Визуальная проверка: ${visErr.message}`, 'error');
+          const friendlyMsg = this._translateAiError(visErr.message);
+          this._toast(`Визуальная проверка: ${friendlyMsg}`, 'error');
         }
       }
 
@@ -429,6 +560,7 @@ class App {
             } else {
               base64 = await AiChecker.fileToBase64(drFile);
             }
+            await this._sleep(4000); // Пауза между чертежами
             const drFindings = await this.aiChecker.analyzeDrawing(apiKey, base64, drFile.name, aiProvider, aiModel);
             // Добавляем метку чертежа
             drFindings.forEach(f => f.location = `Чертёж: ${drFile.name}`);
@@ -453,7 +585,7 @@ class App {
       this._setStep('report', 'done', 100);
 
       // Небольшая задержка для UX
-      await this._delay(500);
+      await this._sleep(500);
 
       this._showResults();
 
@@ -551,11 +683,20 @@ class App {
       this.previewSection.style.display = '';
     }
 
-    const pageEl = document.getElementById(`preview-page-${pageNum}`);
-    if (!pageEl) {
-      this._toast(`Страница ~${pageNum} не найдена в предпросмотре. Убедитесь, что предпросмотр загружен.`, 'info');
+    const pages = document.querySelectorAll('.preview-page');
+    if (!pages || pages.length === 0) {
+      this._toast('Предпросмотр текста не загружен.', 'info');
       return;
     }
+
+    // Ограничиваем запрошенную страницу фактически существующим количеством,
+    // так как номера рассчитываются приблизительно. 
+    let targetNum = parseInt(pageNum, 10);
+    if (isNaN(targetNum) || targetNum < 1) targetNum = 1;
+    if (targetNum > pages.length) targetNum = pages.length;
+
+    const pageEl = document.getElementById(`preview-page-${targetNum}`);
+    if (!pageEl) return;
 
     // Прокручиваем к странице
     pageEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -646,7 +787,30 @@ class App {
     return (bytes / 1048576).toFixed(1) + ' МБ';
   }
 
-  _delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+  _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  _translateAiError(msg) {
+    if (!msg) return 'Неизвестная ошибка ИИ';
+    const lowMsg = msg.toLowerCase();
+
+    if (lowMsg.includes('insufficient balance') || lowMsg.includes('insufficient_quota')) {
+      return 'Недостаточно средств на балансе API. Пополните счет или переключитесь на бесплатный Gemini.';
+    }
+    if (lowMsg.includes('quota exceeded') || lowMsg.includes('rate limit') || lowMsg.includes('429')) {
+      return 'Превышен лимит запросов (Quota Exceeded). Подождите 1-5 минут или попробуйте другой API-ключ.';
+    }
+    if (lowMsg.includes('invalid api key') || lowMsg.includes('api key not found')) {
+      return 'Неверный API-ключ. Проверьте правильность ввода в настройках.';
+    }
+    if (lowMsg.includes('model not found') || lowMsg.includes('not supported')) {
+      return 'Выбранная модель недоступна для вашего ключа.';
+    }
+    if (lowMsg.includes('safety') || lowMsg.includes('blocked')) {
+      return 'Запрос заблокирован фильтром безопасности ИИ (попробуйте другой фрагмент текста).';
+    }
+
+    return msg; // Возвращаем оригинал если не узнали
+  }
 }
 
 // ============================================================
